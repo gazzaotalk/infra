@@ -1,0 +1,87 @@
+version: "3.5"
+services:
+  # ----------------------------------------------------------
+  # traefik :: 리버스 프록시
+  #
+  # 뒷 단(Back-end)에 있는 웹 서버들의 출입을 관리하는 역할을 한다.
+  # Host 헤더를 읽어 매칭되는 서버로 연결시켜준다.
+  #
+  # 또한 let's encrypt와의 연동을 통해 https 인증서를 자동 발급, 갱신해준다.
+  #
+  # 환경변수에 대한 문서
+  # https://doc.traefik.io/traefik/reference/static-configuration/env/
+  # ----------------------------------------------------------
+  traefik:
+    image: traefik
+    restart: unless-stopped
+    networks: [gazzaotalk]
+    ports:
+      - 80:80
+      - 443:443
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-letsencrypt:/letsencrypt
+    environment:
+      # API 및 Dashboard 활성화 옵션
+      #
+      # TRAEFIK_API: Enable api/dashboard. (Default: false)
+      # TRAEFIK_API_INSECURE: Activate API directly on the entryPoint named traefik. (Default: false)
+      - TRAEFIK_API=true
+      - TRAEFIK_API_INSECURE=true
+
+      # Provider 설정 옵션.
+      #
+      # Docker를 true로 설정할 시 Docker 컨테이너를 스캔
+      - TRAEFIK_PROVIDERS_DOCKER=true
+      - TRAEFIK_PROVIDERS_DOCKER_EXPOSEDBYDEFAULT=false
+      - TRAEFIK_LOG_LEVEL=INFO
+
+      # Entrypoint 설정
+      #
+      # TRAEFIK_ENTRYPOINTS_<NAME>: Entry points definition. (Default: false)
+      # TRAEFIK_ENTRYPOINTS_<NAME>_ADDRESS: Entry point address.
+      # TRAEFIK_ENTRYPOINTS_<NAME>_HTTP_TLS: Default TLS configuration for the routers linked to the entry point. (Default: false)
+      # TRAEFIK_ENTRYPOINTS_<NAME>_HTTP_TLS_CERTRESOLVER: Default certificate resolver for the routers linked to the entry point.
+      # TRAEFIK_ENTRYPOINTS_<NAME>_HTTP_REDIRECTIONS_ENTRYPOINT_PERMANENT: Applies a permanent redirection. (Default: true)
+      # TRAEFIK_ENTRYPOINTS_<NAME>_HTTP_REDIRECTIONS_ENTRYPOINT_SCHEME: Scheme used for the redirection. (Default: https)
+      # TRAEFIK_ENTRYPOINTS_<NAME>_HTTP_REDIRECTIONS_ENTRYPOINT_TO: Targeted entry point of the redirection.
+      - TRAEFIK_ENTRYPOINTS_HTTP=true
+      - TRAEFIK_ENTRYPOINTS_HTTP_ADDRESS=:80
+      - TRAEFIK_ENTRYPOINTS_HTTP_HTTP_REDIRECTIONS_ENTRYPOINT_PERMANENT=true
+      - TRAEFIK_ENTRYPOINTS_HTTP_HTTP_REDIRECTIONS_ENTRYPOINT_SCHEME=https
+      - TRAEFIK_ENTRYPOINTS_HTTP_HTTP_REDIRECTIONS_ENTRYPOINT_TO=https
+
+      - TRAEFIK_ENTRYPOINTS_HTTPS=true
+      - TRAEFIK_ENTRYPOINTS_HTTPS_ADDRESS=:443
+      - TRAEFIK_ENTRYPOINTS_HTTPS_HTTP_TLS=true
+      - TRAEFIK_ENTRYPOINTS_HTTPS_HTTP_TLS_CERTRESOLVER=letsencrypt
+
+      # Entrypoint의 Certificate 설정
+      # letsencrypt에서 자동으로 인증서를 발급받으며, 자동으로 갱신되는 기능도 수행한다.
+      #
+      # TRAEFIK_CERTIFICATESRESOLVERS_<NAME>: Certificates resolvers configuration. (Default: false)
+      # TRAEFIK_CERTIFICATESRESOLVERS_<NAME>_ACME_CERTIFICATESDURATION: Certificates' duration in hours. (Default: 2160)
+      # TRAEFIK_CERTIFICATESRESOLVERS_<NAME>_ACME_EMAIL: Email address used for registration.
+      # TRAEFIK_CERTIFICATESRESOLVERS_<NAME>_ACME_STORAGE: Storage to use. (Default: acme.json)
+      # TRAEFIK_CERTIFICATESRESOLVERS_<NAME>_ACME_HTTPCHALLENGE: Activate HTTP-01 Challenge. (Default: false)
+      # TRAEFIK_CERTIFICATESRESOLVERS_<NAME>_ACME_HTTPCHALLENGE_ENTRYPOINT: HTTP challenge EntryPoint
+      # TRAEFIK_CERTIFICATESRESOLVERS_<NAME>_ACME_DNSCHALLENGE: Activate DNS-01 Challenge. (Default: false)
+      # TRAEFIK_CERTIFICATESRESOLVERS_<NAME>_ACME_DNSCHALLENGE_DELAYBEFORECHECK: Assume DNS propagates after a delay in seconds rather than finding and querying nameservers. (Default: 0)
+      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT=true
+      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL=${LETSENCRYPT_EMAIL}
+      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_STORAGE=/letsencrypt/acme.json
+      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_HTTPCHALLENGE=true
+      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_HTTPCHALLENGE_ENTRYPOINT=http
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.traefik.entrypoints=https
+      - traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN}`)
+      - traefik.http.services.traefik.loadbalancer.server.port=8080
+
+volumes:
+  traefik-letsencrypt:
+
+networks:
+  gazzaotalk:
+    external: true
